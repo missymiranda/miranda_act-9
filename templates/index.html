@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Laboratory Activity 9 | System-to-System Integration</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;color:#1f2937;background:#f3f6fb}
+header{background:#173b70;color:white;padding:24px 16px;text-align:center}
+header h1{margin:0 0 8px;font-size:25px}header p{margin:0}
+main{max-width:1200px;margin:26px auto;padding:0 16px}
+.panel{background:white;padding:22px;border-radius:12px;box-shadow:0 3px 14px rgba(20,40,80,.08);margin-bottom:20px}
+h2{margin-top:0;color:#173b70}
+.sub{color:#64748b;margin-top:-5px}
+.form-grid{display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:10px}
+input,button{padding:10px 13px;border-radius:7px;font-size:14px}
+input{border:1px solid #cbd5e1;min-width:0;width:100%;background:white}
+button{border:0;color:white;background:#245ca6;cursor:pointer}
+button:hover{background:#173b70}button:disabled{opacity:.6;cursor:wait}
+button.secondary{background:#64748b}button.green{background:#15803d}button.small{padding:7px 10px;font-size:12px}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.status{margin:12px 0;color:#475569;overflow-wrap:anywhere}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;margin-top:14px}
+th,td{text-align:left;padding:10px;border-bottom:1px solid #e2e8f0;white-space:nowrap}
+th{background:#eaf1fb;color:#173b70}
+td.action-cell{display:flex;gap:6px}
+.badge{display:inline-block;background:#eaf1fb;color:#173b70;border-radius:20px;padding:5px 10px;font-size:12px;font-weight:bold}
+.local{background:#e0f2fe;color:#075985}.imported{background:#dcfce7;color:#166534}.external{background:#fef3c7;color:#92400e}
+.empty{color:#64748b;text-align:center;padding:18px}
+.dashboard{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.metric{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px}
+.metric strong{display:block;font-size:25px;color:#173b70;margin-top:5px}
+.links{display:flex;flex-wrap:wrap;gap:12px}a{color:#245ca6;overflow-wrap:anywhere}
+@media(max-width:800px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.dashboard{grid-template-columns:1fr}}
+@media(max-width:500px){header h1{font-size:21px}.panel{padding:16px}.form-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Student Integration Dashboard</h1>
+  <p>Laboratory Activity 9: System-to-System Integration — View, Save, Send, and Retrieve Data</p>
+</header>
+<main>
+  <section class="panel">
+    <h2>Integration Summary</h2>
+    <div class="dashboard">
+      <div class="metric">My Local Records<strong id="localCount">0</strong></div>
+      <div class="metric">Imported Records<strong id="importedCount">0</strong></div>
+      <div class="metric">Partner Records Loaded<strong id="partnerCount">0</strong></div>
+    </div>
+    <p class="sub">The Source column identifies whether a record is Local, Classmate API, or an external/partner API.</p>
+  </section>
+
+  <section class="panel">
+    <h2>My Records <span class="badge">SQLite Database</span></h2>
+    <p class="sub">Add, view, update, and delete local or imported practice records.</p>
+    <form id="studentForm">
+      <div class="form-grid">
+        <input id="student_id" placeholder="Student ID" required>
+        <input id="name" placeholder="Fictional Name" required>
+        <input id="program" placeholder="Program (e.g. BSIT)" required>
+        <input id="year" type="number" min="1" max="6" placeholder="Year" required>
+        <input id="section" placeholder="Section" required>
+      </div>
+      <div class="actions">
+        <button id="saveButton" type="submit">Add Local Student</button>
+        <button class="secondary" type="button" id="cancelEdit" hidden>Cancel Edit</button>
+        <button class="secondary" type="button" id="refreshButton">Refresh My Records</button>
+        <input id="filterSection" style="max-width:180px" placeholder="Filter section">
+        <button class="secondary" type="button" id="loadSectionButton">Filter</button>
+      </div>
+    </form>
+    <p id="status" class="status" role="status">Loading your records...</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>DB ID</th><th>Student ID</th><th>Name</th><th>Program</th><th>Year</th><th>Section</th><th>Source</th><th>Actions</th></tr></thead>
+      <tbody id="studentList"></tbody>
+    </table></div>
+  </section>
+
+  <section class="panel">
+    <h2>Partner Records</h2>
+    <p class="sub">Enter your assigned classmate's public Render API URL. Only exchange fictional practice data and coordinate with your partner first.</p>
+    <div class="actions">
+      <input id="partnerUrl" style="flex:1;min-width:250px" type="url" placeholder="https://CLASSMATE-APP.onrender.com/api/students">
+      <button type="button" id="loadPartnerButton">Retrieve Partner Records</button>
+    </div>
+    <p id="partnerStatus" class="status" role="status">Partner records have not been loaded yet.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Partner DB ID</th><th>Student ID</th><th>Name</th><th>Program</th><th>Year</th><th>Section</th><th>Action</th></tr></thead>
+      <tbody id="partnerList"><tr><td colspan="7" class="empty">Enter your partner's API URL and retrieve records.</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section class="panel">
+    <h2>Send a Practice Record to Partner</h2>
+    <p class="sub">This sends one fictional record to your partner's POST /api/students endpoint. Confirm the URL with your assigned partner before sending.</p>
+    <div class="form-grid">
+      <input id="send_id" value="EXT-001" placeholder="Practice Student ID">
+      <input id="send_name" value="Sample Exchange Record" placeholder="Fictional Name">
+      <input id="send_program" value="BSIT" placeholder="Program">
+      <input id="send_year" type="number" min="1" max="6" value="1" placeholder="Year">
+      <input id="send_section" value="A" placeholder="Section">
+    </div>
+    <div class="actions"><button class="green" id="sendButton" type="button">Send Record to Partner API</button></div>
+    <p id="sendStatus" class="status" role="status">No record sent yet.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Useful API Endpoints</h2>
+    <div class="links">
+      <a href="/api/students" target="_blank">My Records JSON: /api/students</a>
+      <a href="/partner-records" target="_blank">Partner API proxy (requires ?url=...): /partner-records</a>
+      <a href="/students" target="_blank">Legacy Students: /students</a>
+      <a href="/student" target="_blank">Sample Student: /student</a>
+    </div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let editingId = null;
+let cachedStudents = [];
+let partnerStudents = [];
+
+function setStatus(id, message){ $(id).textContent = message; }
+function sourceBadge(source){
+  const span = document.createElement('span');
+  span.className = 'badge ' + (source === 'Local' ? 'local' : (source === 'Classmate API' ? 'imported' : 'external'));
+  span.textContent = source || 'Local';
+  return span;
+}
+function cell(row, value){
+  const td = document.createElement('td');
+  td.textContent = value === undefined || value === null ? '' : String(value);
+  row.appendChild(td);
+  return td;
+}
+function actionButton(label, handler, className='small'){
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = className; b.textContent = label;
+  b.addEventListener('click', handler);
+  return b;
+}
+function renderMyStudents(students){
+  cachedStudents = students;
+  $('studentList').replaceChildren();
+  if(!students.length){
+    const tr=document.createElement('tr'), td=cell(tr,'No records found.');
+    td.colSpan=8; td.className='empty'; $('studentList').appendChild(tr);
+  }
+  students.forEach(s=>{
+    const tr=document.createElement('tr');
+    [s.id,s.student_id,s.name,s.program,s.year,s.section].forEach(v=>cell(tr,v));
+    const sourceTd=document.createElement('td'); sourceTd.appendChild(sourceBadge(s.source)); tr.appendChild(sourceTd);
+    const actions=document.createElement('td'); actions.className='action-cell';
+    actions.append(actionButton('Edit',()=>startEdit(s)),actionButton('Delete',()=>deleteStudent(s.id,s.name),'small danger'));
+    tr.appendChild(actions); $('studentList').appendChild(tr);
+  });
+  $('localCount').textContent=students.filter(s=>(s.source||'Local')==='Local').length;
+  $('importedCount').textContent=students.filter(s=>(s.source||'Local')!=='Local').length;
+}
+async function loadStudents(){
+  setStatus('status','Loading records...');
+  try{
+    const r=await fetch('/api/students'); const data=await r.json();
+    if(!r.ok) throw new Error(data.error||'Could not load records.');
+    renderMyStudents(data); setStatus('status','Retrieved '+data.length+' record(s) from your database.');
+  }catch(e){setStatus('status','Error: '+e.message);}
+}
+function formData(){
+  return {student_id:$('student_id').value.trim(),name:$('name').value.trim(),
+    program:$('program').value.trim(),year:Number($('year').value),section:$('section').value.trim()};
+}
+$('studentForm').addEventListener('submit',async e=>{
+  e.preventDefault(); const data=formData();
+  const url=editingId===null?'/api/students':'/api/students/'+editingId;
+  try{
+    const r=await fetch(url,{method:editingId===null?'POST':'PUT',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    const result=await r.json(); if(!r.ok)throw new Error(result.error||'Save failed.');
+    setStatus('status',result.message||'Saved.'); resetForm(); await loadStudents();
+  }catch(err){setStatus('status','Error: '+err.message);}
+});
+function startEdit(s){
+  editingId=s.id; $('student_id').value=s.student_id; $('name').value=s.name;
+  $('program').value=s.program; $('year').value=s.year; $('section').value=s.section;
+  $('saveButton').textContent='Save Changes'; $('cancelEdit').hidden=false;
+  setStatus('status','Editing record #'+s.id+'.'); $('studentForm').scrollIntoView({behavior:'smooth'});
+}
+function resetForm(){
+  editingId=null; $('studentForm').reset(); $('saveButton').textContent='Add Local Student'; $('cancelEdit').hidden=true;
+}
+$('cancelEdit').addEventListener('click',resetForm);
+async function deleteStudent(id,name){
+  if(!confirm('Delete practice record "'+name+'"?'))return;
+  try{
+    const r=await fetch('/api/students/'+id,{method:'DELETE'}); const d=await r.json();
+    if(!r.ok)throw new Error(d.error||'Delete failed.'); setStatus('status',d.message); await loadStudents();
+  }catch(e){setStatus('status','Error: '+e.message);}
+}
+$('refreshButton').addEventListener('click',loadStudents);
+$('loadSectionButton').addEventListener('click',()=>{
+  const section=$('filterSection').value.trim().toUpperCase();
+  if(!section){renderMyStudents(cachedStudents);return;}
+  renderMyStudents(cachedStudents.filter(s=>String(s.section).toUpperCase()===section));
+  setStatus('status','Filtered by section '+section+'. Click Refresh My Records to show all records.');
+});
+
+function renderPartnerRecords(students){
+  partnerStudents=students; $('partnerList').replaceChildren();
+  $('partnerCount').textContent=students.length;
+  if(!students.length){const tr=document.createElement('tr'),td=cell(tr,'No partner records found.');td.colSpan=7;td.className='empty';$('partnerList').appendChild(tr);return;}
+  students.forEach((s,index)=>{
+    const tr=document.createElement('tr');
+    [s.id,s.student_id,s.name,s.program,s.year,s.section].forEach(v=>cell(tr,v));
+    const td=document.createElement('td');td.className='action-cell';
+    td.append(actionButton('View',()=>alert(
+      'Partner record details\\nStudent ID: '+(s.student_id||'')+'\\nName: '+(s.name||'')+
+      '\\nProgram: '+(s.program||'')+'\\nYear: '+(s.year||'')+'\\nSection: '+(s.section||'')
+    )));
+    td.append(actionButton('Save to My Database',()=>importPartnerRecord(s),'small green'));
+    tr.appendChild(td);$('partnerList').appendChild(tr);
+  });
+}
+$('loadPartnerButton').addEventListener('click',async()=>{
+  const url=$('partnerUrl').value.trim();
+  if(!url){setStatus('partnerStatus',"Enter your partner's /api/students URL first.");return;}
+  setStatus('partnerStatus','Retrieving partner records...');
+  try{
+    const r=await fetch('/partner-records?url='+encodeURIComponent(url));const data=await r.json();
+    if(!r.ok)throw new Error(data.error||'Could not retrieve partner records.');
+    renderPartnerRecords(data);setStatus('partnerStatus','Retrieved '+data.length+' partner record(s). Choose View or Save to My Database.');
+  }catch(e){setStatus('partnerStatus','Error: '+e.message);}
+});
+async function importPartnerRecord(s){
+  const data={student_id:s.student_id,name:s.name,program:s.program,year:s.year,section:s.section};
+  try{
+    const r=await fetch('/import-student',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    const result=await r.json();if(!r.ok)throw new Error(result.error||'Import failed.');
+    setStatus('partnerStatus','Saved "'+s.name+'" to your database with source Classmate API.');
+    await loadStudents();
+  }catch(e){setStatus('partnerStatus','Error: '+e.message);}
+}
+$('sendButton').addEventListener('click',async()=>{
+  const url=$('partnerUrl').value.trim();
+  if(!url){setStatus('sendStatus',"Enter your partner's /api/students URL above first.");return;}
+  const record={student_id:$('send_id').value.trim(),name:$('send_name').value.trim(),
+    program:$('send_program').value.trim(),year:Number($('send_year').value),section:$('send_section').value.trim()};
+  if(!record.student_id||!record.name||!record.program||!record.section||!record.year){
+    setStatus('sendStatus','Complete all practice record fields first.');return;
+  }
+  if(!confirm('Send this fictional practice record to your assigned partner?'))return;
+  setStatus('sendStatus','Sending record...');
+  try{
+    const r=await fetch('/send-to-partner',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({url,record})});
+    const result=await r.json();if(!r.ok)throw new Error(result.error||'Send failed.');
+    setStatus('sendStatus','Partner API status: '+result.partner_status+'. '+JSON.stringify(result.partner_response));
+  }catch(e){setStatus('sendStatus','Error: '+e.message);}
+}
+);
+loadStudents();
+</script>
+</body>
+</html>
